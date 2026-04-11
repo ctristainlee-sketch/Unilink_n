@@ -7,9 +7,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import { getDatabase, ref, push, onValue, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-  const config = {
+  // Configuration verified for Google Sites Deployment
+  const firebaseConfig = {
     apiKey: "AIzaSyD9v8tKBmSU9vqqgBO34yBMRrbHcFZFAs0",
     authDomain: "yoshiuniverse-6e0c9.firebaseapp.com",
     databaseURL: "https://yoshiuniverse-6e0c9-default-rtdb.firebaseio.com",
@@ -19,33 +20,33 @@
     appId: "1:645597342267:web:77b3b632310f86e198ca1e"
   };
 
-  const app = initializeApp(config);
+  const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
-  const linksRef = ref(db, 'public/links');
+  const publicLinksRef = ref(db, 'public/links');
 
-  // Atlas Diagnostic: Checks reachability and silently purges blocked nodes
-  async function atlasDiagnostic(id, url) {
+  // Atlas Scanner: Client-side diagnostic that purges nodes blocked by firewalls
+  async function runAtlasDiagnostic(id, url) {
     if(!url || url.trim().startsWith('<')) return;
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
       
-      // mode: 'no-cors' allows us to check if the server responds at all
+      // Ping check: If it fails or is blocked, fetch throws or times out
       await fetch(url, { mode: 'no-cors', signal: controller.signal });
       clearTimeout(timeoutId);
-    } catch(e) {
-      console.warn(`[ATLAS] Link inaccessible or blocked. Purging: ${id}`);
+    } catch (e) {
+      console.warn(`[ATLAS_SCAN] Purging blocked node: ${id}`);
       remove(ref(db, `public/links/${id}`));
     }
   }
 
-  onValue(linksRef, (snap) => {
-    const list = document.getElementById('network-list');
+  onValue(publicLinksRef, (snapshot) => {
+    const list = document.getElementById('network-feed');
     list.innerHTML = '';
     
-    snap.forEach(child => {
+    snapshot.forEach((child) => {
       const data = child.val();
-      const key = child.key;
+      const id = child.key;
       const content = data.anonLink || "";
       const isHTML = content.trim().startsWith('<');
       
@@ -54,109 +55,116 @@
       
       if (isHTML) {
         card.innerHTML = `
-          <div class="meta-tag">SOURCE_ID: ${key.substring(0,8)}</div>
-          <div class="entry-name">${data.name || 'ANON_SOURCE'}</div>
-          <div class="html-container">${content}</div>
+          <div class="meta-info">DATA_TYPE: SOURCE_CODE // ID: ${id.substring(0,6)}</div>
+          <div class="title">${data.name}</div>
+          <div class="html-viewer">${content}</div>
         `;
       } else {
         card.innerHTML = `
-          <div class="meta-tag">LINK_ID: ${key.substring(0,8)}</div>
-          <div class="entry-name">${data.name || 'ANON_LINK'}</div>
+          <div class="meta-info">DATA_TYPE: UPLINK_URL // ID: ${id.substring(0,6)}</div>
+          <div class="title">${data.name}</div>
           <div class="iframe-container">
-             <iframe src="${content}" loading="lazy" title="${data.name}"></iframe>
+             <iframe src="${content}" loading="lazy" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
           </div>
-          <a href="${content}" target="_blank" class="action-btn">EXTERNAL_UPLINK</a>
+          <div class="card-footer">
+            <a href="${content}" target="_blank" class="launch-btn">LAUNCH_EXTERNAL</a>
+          </div>
         `;
-        atlasDiagnostic(key, content);
+        // Run scanner on URLs only
+        runAtlasDiagnostic(id, content);
       }
       list.appendChild(card);
     });
-  }, (error) => {
-    console.error("Firebase Read Error:", error);
   });
 
-  window.sendBroadcast = () => {
-    const n = document.getElementById('input-name').value;
-    const l = document.getElementById('input-link').value;
-    if(n && l) {
-      push(linksRef, { 
-        name: n, 
-        anonLink: l,
-        timestamp: Date.now() 
+  window.broadcast = () => {
+    const name = document.getElementById('name-input').value;
+    const link = document.getElementById('link-input').value;
+    if(name && link) {
+      push(publicLinksRef, {
+        name: name,
+        anonLink: link,
+        timestamp: Date.now()
       });
-      document.getElementById('input-name').value = '';
-      document.getElementById('input-link').value = '';
+      document.getElementById('name-input').value = '';
+      document.getElementById('link-input').value = '';
     }
   };
 </script>
 <style>
+  :root {
+    --neon: #00ffe1;
+    --panel-bg: rgba(10, 15, 25, 0.95);
+  }
+
   body { 
     margin: 0; padding: 20px; background: transparent; color: #fff; 
     font-family: 'Rajdhani', sans-serif; overflow-x: hidden;
   }
 
-  .panel { 
-    background: rgba(13, 18, 32, 0.95); border: 1px solid rgba(0, 255, 225, 0.3); 
-    padding: 30px; border-radius: 12px; margin-bottom: 30px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    /* Edge Fading */
-    mask-image: linear-gradient(to bottom, black 95%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, black 95%, transparent 100%);
+  /* Fading edge panel design */
+  .broadcast-panel { 
+    background: var(--panel-bg); 
+    border: 1px solid rgba(0, 255, 225, 0.2);
+    padding: 30px; border-radius: 12px; margin-bottom: 40px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
   }
 
   input, textarea { 
-    width: 100%; background: #000; color: #00ffe1; border: 1px solid #1e3050; 
-    padding: 12px; margin: 10px 0; border-radius: 6px; font-family: 'Share Tech Mono'; 
+    width: 100%; background: #050505; color: var(--neon); border: 1px solid #1e3050; 
+    padding: 14px; margin: 10px 0; border-radius: 6px; font-family: 'Share Tech Mono'; 
     box-sizing: border-box; outline: none; transition: 0.3s;
   }
-  input:focus, textarea:focus { border-color: #00ffe1; box-shadow: 0 0 10px rgba(0,255,225,0.2); }
+  input:focus, textarea:focus { border-color: var(--neon); box-shadow: 0 0 15px rgba(0,255,225,0.1); }
 
   .broadcast-btn { 
-    width: 100%; background: #00ffe1; color: #000; border: none; padding: 15px; 
+    width: 100%; background: var(--neon); color: #000; border: none; padding: 16px; 
     font-weight: 700; cursor: pointer; border-radius: 6px; font-family: 'Share Tech Mono'; 
-    text-transform: uppercase; transition: 0.3s;
+    text-transform: uppercase; transition: 0.3s; margin-top: 10px;
   }
-  .broadcast-btn:hover { background: #fff; transform: translateY(-2px); }
+  .broadcast-btn:hover { filter: brightness(1.2); transform: scale(1.01); }
 
   .network-card { 
-    background: rgba(0, 0, 0, 0.75); border-left: 4px solid #00ffe1; 
-    padding: 20px; margin-top: 25px; border-radius: 8px; 
-    border-right: 1px solid rgba(0,255,225,0.1);
-    border-top: 1px solid rgba(0,255,225,0.1);
-    border-bottom: 1px solid rgba(0,255,225,0.1);
-    backdrop-filter: blur(5px);
+    background: rgba(0, 0, 0, 0.8); border-left: 4px solid var(--neon); 
+    padding: 25px; margin-top: 25px; border-radius: 8px; 
+    border-top: 1px solid rgba(255,255,255,0.05);
+    border-right: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
   }
 
-  .meta-tag { font-family: 'Share Tech Mono'; font-size: 10px; color: #4a6080; letter-spacing: 1px; }
-  .entry-name { color: #00ffe1; font-size: 22px; font-weight: 700; margin: 8px 0 15px 0; }
+  .meta-info { font-family: 'Share Tech Mono'; font-size: 10px; color: #4a6080; letter-spacing: 1px; margin-bottom: 5px; }
+  .title { color: var(--neon); font-size: 22px; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; }
   
   .iframe-container { 
-    width: 100%; height: 400px; background: #050505; border-radius: 4px; 
+    width: 100%; height: 380px; background: #fff; border-radius: 4px; 
     overflow: hidden; margin-bottom: 15px; border: 1px solid #111;
   }
-  iframe { width: 100%; height: 100%; border: none; background: #fff; }
+  iframe { width: 100%; height: 100%; border: none; }
 
-  .html-container { 
-    background: #050505; border: 1px solid #1a1a1a; padding: 15px; 
+  .html-viewer { 
+    background: #050505; border: 1px dashed #1e3050; padding: 15px; 
     border-radius: 6px; max-height: 500px; overflow-y: auto; color: #fff;
+    font-family: 'Share Tech Mono'; font-size: 13px;
   }
 
-  .action-btn { 
-    display: inline-block; background: transparent; color: #00ffe1; 
-    border: 1px solid #00ffe1; padding: 8px 18px; font-size: 11px; 
+  .launch-btn { 
+    display: inline-block; background: transparent; color: var(--neon); 
+    border: 1px solid var(--neon); padding: 8px 20px; font-size: 11px; 
     font-weight: 700; border-radius: 4px; text-decoration: none; 
     font-family: 'Share Tech Mono'; transition: 0.3s;
   }
-  .action-btn:hover { background: #00ffe1; color: #000; }
+  .launch-btn:hover { background: var(--neon); color: #000; }
 </style>
 </head>
 <body>
-  <div class="panel">
-    <div style="font-family:'Share Tech Mono'; font-size:12px; color:#00ffe1; margin-bottom:10px;">// PUBLIC_DATA_UPLINK</div>
-    <input id="input-name" placeholder="IDENTIFIER / TITLE">
-    <textarea id="input-link" rows="3" placeholder="DESTINATION_URL OR HTML_SOURCE_CODE"></textarea>
-    <button class="broadcast-btn" onclick="sendBroadcast()">BROADCAST_TO_NETWORK</button>
+  <div class="broadcast-panel">
+    <div style="font-family:'Share Tech Mono'; font-size:12px; color:var(--neon); margin-bottom:10px;">[ UPLINK_STATION_ACTIVE ]</div>
+    <input id="name-input" placeholder="IDENTIFIER / ASSET_NAME">
+    <textarea id="link-input" rows="3" placeholder="PASTE_URL_OR_HTML_SOURCE_CODE"></textarea>
+    <button class="broadcast-btn" onclick="broadcast()">BROADCAST_TO_NETWORK</button>
   </div>
-  <div id="network-list"></div>
+  <div id="network-feed"></div>
 </body>
 </html>
