@@ -3,16 +3,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Network Node — Unilink</title>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <script type="module">
-  // Import the functions you need from the SDKs you need
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-  // Your web app's Firebase configuration from Project Settings
-  const firebaseConfig = {
+  const config = {
     apiKey: "AIzaSyD9v8tKBmSU9vqqgBO34yBMRrbHcFZFAs0",
     authDomain: "yoshiuniverse-6e0c9.firebaseapp.com",
     databaseURL: "https://yoshiuniverse-6e0c9-default-rtdb.firebaseio.com",
@@ -22,127 +18,174 @@
     appId: "1:645597342267:web:77b3b632310f86e198ca1e"
   };
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
+  const app = initializeApp(config);
   const db = getDatabase(app);
-  
-  // Reference based on your Firebase Rules: public/links
-  const linksRef = ref(db, `public/links`);
+  const linksRef = ref(db, 'public/links');
 
-  async function atlasHardwallCheck(id, url) {
-    if (!url || !url.startsWith('http')) return; 
+  // Atlas Diagnostic: Silently check if link is blocked and purge if so
+  async function atlasPurge(id, url) {
+    if(!url || url.trim().startsWith('<')) return;
     try {
-      await fetch(url, { mode: 'no-cors' });
-    } catch (err) {
-      // ATLAS PURGE: Catch checks for hard network-level blocks/TypeError
-      if (err instanceof TypeError || err.name === 'AbortError') {
-        remove(ref(db, `public/links/${id}`));
-      }
+      // Use no-cors to bypass CORS issues while checking reachability
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      await fetch(url, { mode: 'no-cors', signal: controller.signal });
+      clearTimeout(timeoutId);
+    } catch(e) {
+      // If the fetch is aborted or fails, it's likely a dead/blocked link
+      remove(ref(db, `public/links/${id}`));
     }
   }
 
-  onValue(linksRef, (snapshot) => {
-    const list = document.getElementById('list');
+  onValue(linksRef, (snap) => {
+    const list = document.getElementById('network-list');
     list.innerHTML = '';
-    snapshot.forEach((child) => {
+    snap.forEach(child => {
       const data = child.val();
-      const card = document.createElement('div');
-      card.className = 'link-card';
-      const isHtml = data.url && data.url.trim().startsWith('<');
+      const key = child.key;
+      const isCode = data.anonLink.trim().startsWith('<');
       
-      if (isHtml) {
-        card.innerHTML = `
-          <div class="card-header">
-            <strong>${data.name}</strong> <span class="tag">CODE_INJECT</span>
-          </div>
-          <div class="html-preview">${data.url}</div>
-        `;
-      } else {
-        card.innerHTML = `
-          <div class="card-header">
-            <strong>${data.name}</strong> <span class="tag">EXTERNAL_URL</span>
-          </div>
-          <small>${data.url}</small>
-          <div style="margin-top:10px">
-            <a href="${data.url}" target="_blank" class="launch-btn">LAUNCH</a>
-          </div>
-        `;
-        atlasHardwallCheck(child.key, data.url);
-      }
+      const card = document.createElement('div');
+      card.className = 'network-card';
+      card.innerHTML = `
+        <div class="meta-tag">LINK_ID: ${key.substring(0,6)}</div>
+        <div class="entry-name">${data.name}</div>
+        ${isCode ? 
+          `<div class="code-container"><code>${data.anonLink.substring(0,100)}...</code></div>` : 
+          `<div class="entry-url">${data.anonLink}</div><a href="${data.anonLink}" target="_blank" class="action-btn">ESTABLISH_UPLINK</a>`
+        }
+      `;
       list.appendChild(card);
+      
+      // Run diagnostic
+      if(!isCode) atlasPurge(key, data.anonLink);
     });
   });
 
-  window.addLink = () => {
-    const name = document.getElementById('name').value;
-    const url = document.getElementById('url').value;
-    if(name && url) {
+  window.sendBroadcast = () => {
+    const n = document.getElementById('input-name').value;
+    const l = document.getElementById('input-link').value;
+    if(n && l) {
       push(linksRef, { 
-        name, 
-        url,
-        addedAt: Date.now()
+        name: n, 
+        anonLink: l,
+        timestamp: Date.now() 
       });
-      document.getElementById('name').value = '';
-      document.getElementById('url').value = '';
+      document.getElementById('input-name').value = '';
+      document.getElementById('input-link').value = '';
     }
   };
 </script>
 <style>
   body { 
-    margin: 0; padding: 20px;
-    background: transparent; color: #d0e8ff; font-family: 'Rajdhani', sans-serif;
-    background-image: url('https://cdn.phototourl.com/free/2026-04-11-c6cf83a1-60bb-4ec1-98b5-5f8cf6cad7e7.png');
-    background-size: cover; background-attachment: fixed;
+    margin: 0; padding: 20px; 
+    background: transparent; 
+    color: #fff; 
+    font-family: 'Rajdhani', sans-serif;
   }
-  .panel { 
+
+  .input-panel { 
     background: rgba(13, 18, 32, 0.9); 
     border: 1px solid rgba(0, 255, 225, 0.2); 
-    padding: 25px; 
+    padding: 30px; 
     border-radius: 12px; 
-    margin-bottom: 20px; 
-    backdrop-filter: blur(10px);
-    mask-image: linear-gradient(to bottom, black 95%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, black 95%, transparent 100%);
+    margin-bottom: 30px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    /* Edge Fading */
+    mask-image: linear-gradient(to bottom, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 90%, transparent 100%);
   }
-  h2 { color:#00ffe1; margin:0 0 15px 0; font-family: 'Share Tech Mono'; letter-spacing: 2px; }
-  textarea, input { 
-    width: 100%; background: #000; color: #00ffe1; border: 1px solid #1e3050; 
-    padding: 12px; margin: 5px 0; border-radius: 4px; box-sizing: border-box; 
-    font-family: 'Share Tech Mono'; font-size: 14px;
+
+  .header-text {
+    font-family: 'Share Tech Mono', monospace;
+    color: #00ffe1;
+    font-size: 14px;
+    margin-bottom: 20px;
+    display: block;
+    letter-spacing: 1px;
   }
-  textarea { height: 100px; resize: vertical; }
-  button { 
-    width: 100%; background: #00ffe1; color: #000; border: none; 
-    padding: 12px; font-weight: bold; border-radius: 4px; cursor: pointer; 
-    text-transform: uppercase; transition: 0.3s; margin-top: 10px;
+
+  input, textarea { 
+    width: 100%; 
+    background: rgba(0,0,0,0.4); 
+    color: #00ffe1; 
+    border: 1px solid #1e3050; 
+    padding: 14px; 
+    margin: 10px 0; 
+    border-radius: 6px; 
+    box-sizing: border-box; 
+    font-family: 'Share Tech Mono';
+    font-size: 15px;
+    outline: none;
+    transition: 0.3s;
   }
-  button:hover { background: #fff; box-shadow: 0 0 15px #00ffe1; }
-  .link-card { 
-    background: rgba(255, 255, 255, 0.05); border-left: 3px solid #00ffe1; 
-    padding: 15px; margin-top: 15px; border-radius: 8px; backdrop-filter: blur(10px);
+
+  input:focus, textarea:focus { border-color: #00ffe1; background: rgba(0,0,0,0.6); }
+
+  .broadcast-btn { 
+    width: 100%; 
+    background: #00ffe1; 
+    color: #000;
+    border: none; 
+    padding: 15px; 
+    font-weight: 700; 
+    cursor: pointer; 
+    border-radius: 6px; 
+    font-family: 'Share Tech Mono';
+    font-size: 16px;
+    text-transform: uppercase;
+    transition: 0.3s;
   }
-  .card-header { display: flex; justify-content: space-between; align-items: center; }
-  .tag { font-size: 9px; padding: 2px 6px; background: rgba(0, 255, 225, 0.1); border: 1px solid #00ffe1; border-radius: 3px; }
-  .html-preview { 
-    margin-top: 10px; padding: 10px; background: rgba(0, 0, 0, 0.5); 
-    border-radius: 4px; border: 1px dashed rgba(0, 255, 225, 0.3);
+
+  .broadcast-btn:hover { background: #fff; box-shadow: 0 0 20px rgba(0, 255, 225, 0.4); }
+
+  .network-card { 
+    background: rgba(0, 0, 0, 0.5); 
+    border-left: 4px solid #00ffe1; 
+    padding: 20px; 
+    margin-top: 15px; 
+    border-radius: 8px;
+    backdrop-filter: blur(5px);
   }
-  .launch-btn {
-    display: inline-block; background: #00ffe1; color: #000; 
-    text-decoration: none; padding: 5px 15px; font-weight: bold; 
-    font-size: 12px; border-radius: 4px;
+
+  .meta-tag { font-family: 'Share Tech Mono'; font-size: 10px; color: #4a6080; margin-bottom: 5px; }
+  .entry-name { color: #00ffe1; font-size: 20px; font-weight: 700; }
+  .entry-url { font-family: 'Share Tech Mono'; font-size: 12px; color: #5c789d; margin: 12px 0; word-break: break-all; }
+  
+  .action-btn { 
+    display: inline-block; 
+    background: transparent; 
+    color: #00ffe1; 
+    text-decoration: none; 
+    padding: 6px 15px; 
+    font-size: 12px; 
+    font-weight: 700; 
+    border: 1px solid #00ffe1;
+    border-radius: 4px;
+    font-family: 'Share Tech Mono';
+    transition: 0.3s;
   }
-  small { font-family: 'Share Tech Mono'; color: #4a6080; font-size: 11px; display: block; overflow-wrap: break-word; }
+
+  .action-btn:hover { background: #00ffe1; color: #000; }
+
+  .code-container { 
+    background: #050505; 
+    border: 1px dashed #333; 
+    padding: 12px; 
+    margin-top: 15px; 
+    border-radius: 4px;
+    font-size: 11px;
+    color: #666;
+  }
 </style>
 </head>
 <body>
-  <div class="panel">
-    <h2>🌐 PUBLIC_NETWORK</h2>
-    <input id="name" placeholder="Title/Identifier">
-    <textarea id="url" placeholder="Paste URL or HTML Code here..."></textarea>
-    <button onclick="addLink()">PUSH TO HUB</button>
+  <div class="input-panel">
+    <span class="header-text">// NETWORK_UPLINK_PROTOCOL</span>
+    <input id="input-name" placeholder="Identity / Title">
+    <textarea id="input-link" rows="2" placeholder="Destination URL or HTML Snippet"></textarea>
+    <button class="broadcast-btn" onclick="sendBroadcast()">BROADCAST_SIGNAL</button>
   </div>
-  <div id="list"></div>
+  <div id="network-list"></div>
 </body>
 </html>
-
