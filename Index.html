@@ -1,0 +1,120 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yoshi-Web — Public Links</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #080b12; --bg2: #0d1220; --surface: #151f30; --border: #1e3050;
+    --neon: #f59e0b; --text: #d0e8ff; --text-dim: #4a6080;
+    --font-main: 'Rajdhani', sans-serif; --font-px: 'Press Start 2P', cursive;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-main); margin: 0; }
+  nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; height: 60px; }
+  .nav-logo { font-family: var(--font-px); font-size: 10px; color: var(--neon); margin-right: 30px; }
+  .nav-btn { color: var(--text-dim); text-decoration: none; font-weight: 600; font-size: 14px; margin-right: 20px; transition: 0.2s; cursor: pointer; }
+  .nav-btn.active { color: var(--neon); }
+  
+  main { padding: 40px 20px; max-width: 1200px; margin: 0 auto; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 25px; margin-bottom: 30px; }
+  input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+  .btn { background: var(--neon); color: var(--bg); border: none; padding: 10px 20px; border-radius: 4px; font-weight: 700; cursor: pointer; }
+  
+  .links-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+  .link-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 15px; cursor: pointer; transition: 0.3s; }
+  .link-card:hover { border-color: var(--neon); }
+  .link-img { width: 100%; height: 120px; background: var(--surface); border-radius: 4px; object-fit: cover; margin-bottom: 10px; }
+
+  #viewer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+  #viewer-window { width: 90vw; height: 85vh; background: #1a1a1a; border: 1px solid #333; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+  .viewer-bar { background: #2b2b2b; padding: 10px 15px; display: flex; align-items: center; gap: 15px; }
+  .address-bar { flex: 1; background: #111; border: 1px solid #444; border-radius: 20px; padding: 5px 20px; color: #aaa; font-size: 13px; }
+  .viewer-content { flex: 1; background: white; border: none; }
+</style>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyD9v8tKBmSU9vqqgBO34yBMRrbHcFZFAs0",
+    authDomain: "yoshiuniverse-6e0c9.firebaseapp.com",
+    databaseURL: "https://yoshiuniverse-6e0c9-default-rtdb.firebaseio.com",
+    projectId: "yoshiuniverse-6e0c9",
+    storageBucket: "yoshiuniverse-6e0c9.firebasestorage.app",
+    messagingSenderId: "645597342267",
+    appId: "1:645597342267:web:77b3b632310f86e198ca1e"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  window.openViewer = (url) => {
+    document.getElementById('viewer-overlay').style.display = 'flex';
+    document.getElementById('viewer-frame').src = url;
+  };
+
+  window.closeViewer = () => {
+    document.getElementById('viewer-overlay').style.display = 'none';
+    document.getElementById('viewer-frame').src = 'about:blank';
+  };
+
+  window.addPublicLink = () => {
+    const name = document.getElementById('p-name').value;
+    const url = document.getElementById('p-url').value;
+    if(!name || !url) return;
+    push(ref(db, `public/links`), { name, url, img: 'https://via.placeholder.com/250x120/151f30/f59e0b?text=Public' });
+    document.getElementById('p-name').value = '';
+    document.getElementById('p-url').value = '';
+  };
+
+  onValue(ref(db, `public/links`), (snapshot) => {
+    const grid = document.getElementById('public-grid');
+    grid.innerHTML = '';
+    snapshot.forEach(child => {
+      const data = child.val();
+      const div = document.createElement('div');
+      div.className = 'link-card';
+      div.onclick = () => window.openViewer(data.url);
+      div.innerHTML = `<img class="link-img" src="${data.img}"><div style="font-weight:bold">${data.name}</div>`;
+      grid.appendChild(div);
+    });
+  });
+</script>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">YOSHI-WEB</div>
+  <a class="nav-btn" href="home.html">Home</a>
+  <a class="nav-btn" href="mylinks.html">MyLinks</a>
+  <a class="nav-btn active" href="public.html">Public</a>
+</nav>
+
+<main>
+  <div class="panel">
+    <input id="p-name" placeholder="Public Site Name">
+    <input id="p-url" placeholder="https://...">
+    <button class="btn" onclick="addPublicLink()">+ Add Public Link</button>
+  </div>
+  <div id="public-grid" class="links-grid"></div>
+</main>
+
+<div id="viewer-overlay">
+  <div id="viewer-window">
+    <div class="viewer-bar">
+      <div style="background:#ff5f56; width:12px; height:12px; border-radius:50%; cursor:pointer" onclick="closeViewer()"></div>
+      <div class="address-bar">https://you-anon.link/view?target=...</div>
+    </div>
+    <iframe id="viewer-frame" class="viewer-content"></iframe>
+  </div>
+</div>
+
+</body>
+</html>
+
+```
