@@ -2,244 +2,302 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Network Node — Atlas Terminal</title>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yoshi Web | Pro Browser</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <style>
+        :root {
+            --bg-base: #09090b;
+            --bg-panel: rgba(24, 24, 27, 0.85);
+            --bg-elevated: rgba(39, 39, 42, 0.9);
+            --accent: #06b6d4;
+            --danger: #ff0055;
+            --warning: #ffcc00;
+            --text-main: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --border: rgba(63, 63, 70, 0.5);
+        }
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyD9v8tKBmSU9vqqgBO34yBMRrbHcFZFAs0",
-    authDomain: "yoshiuniverse-6e0c9.firebaseapp.com",
-    databaseURL: "https://yoshiuniverse-6e0c9-default-rtdb.firebaseio.com",
-    projectId: "yoshiuniverse-6e0c9",
-    storageBucket: "yoshiuniverse-6e0c9.firebasestorage.app",
-    messagingSenderId: "645597342267",
-    appId: "1:645597342267:web:77b3b632310f86e198ca1e"
-  };
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; transition: 0.2s ease; }
+        body { background: var(--bg-base); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-  const linksRef = ref(db, `public/links`);
+        .chrome { background: rgba(0,0,0,0.8); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); position: relative; z-index: 10; }
+        .tab-strip { display: flex; padding: 8px 8px 0; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+        
+        .tab {
+            padding: 10px 18px; background: var(--bg-elevated); border-radius: 10px 10px 0 0;
+            font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 10px;
+            color: var(--text-muted); min-width: 160px; border: 1px solid transparent; border-bottom: none;
+        }
+        .tab.active { background: var(--bg-panel); color: var(--accent); border-color: var(--border); border-bottom: 2px solid var(--accent); }
 
-  let activeData = [];
+        .toolbar { padding: 12px 16px; display: flex; gap: 12px; align-items: center; }
+        .address-bar { flex: 1; display: flex; background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 25px; padding: 0 20px; align-items: center; }
+        .address-bar input { flex: 1; background: transparent; border: none; padding: 10px; color: #fff; outline: none; font-size: 14px; }
 
-  function logAtlas(msg, type = 'info') {
-    const log = document.getElementById('atlas-log');
-    const entry = document.createElement('div');
-    entry.style.color = type === 'error' ? '#ff4d4d' : type === 'warn' ? '#ffcc00' : '#00ffe1';
-    entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    log.prepend(entry);
-  }
+        .icon-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 10px; border-radius: 50%; font-size: 20px; }
+        .viewport { flex: 1; position: relative; background: #fff; }
+        .tab-view { position: absolute; inset: 0; display: none; overflow-y: auto; height: 100%; width: 100%; }
+        .tab-view.active { display: block; }
+        
+        iframe { width: 100%; height: 100%; border: none; background: #fff; display: block; }
 
-  async function runAtlasPurge() {
-    logAtlas("INITIATING_SYSTEM_SCAN...", "info");
-    const suspicious = [];
-    
-    // Stage 1: Fast Fetch (Suspicious Check)
-    for (let item of activeData) {
-      if (item.url.startsWith('<')) continue;
-      try {
-        logAtlas(`SCANNING: ${item.name}...`);
-        await fetch(item.url, { mode: 'no-cors' });
-      } catch (err) {
-        logAtlas(`NODE_SUSPICIOUS: ${item.name}`, "warn");
-        suspicious.push(item);
-      }
-    }
+        .results-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+            gap: 20px; padding: 20px; max-width: 1200px; margin: 0 auto;
+        }
 
-    // Stage 2: Catch Check (Hardwall/Imposter Check)
-    logAtlas("ANALYZING_SUSPICIOUS_NODES...", "warn");
-    for (let item of suspicious) {
-      try {
-        const res = await fetch(item.url, { mode: 'no-cors' });
-      } catch (err) {
-        logAtlas(`IMPOSTER_DETECTED: Deleting ${item.name}`, "error");
-        await remove(ref(db, `public/links/${item.id}`));
-      }
-    }
+        .result-card {
+            background: var(--bg-panel); border: 1px solid var(--border); border-radius: 16px;
+            overflow: hidden; cursor: pointer; display: flex; flex-direction: column;
+            position: relative; animation: fadeIn 0.3s ease-out forwards;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .result-card:hover { border-color: var(--accent); transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
 
-    logAtlas("SCAN_COMPLETE. VERIFYING_UI_INTEGRITY...", "info");
-    checkUICompatibility();
-  }
+        .card-preview { height: 140px; background: #000; position: relative; overflow: hidden; border-bottom: 1px solid var(--border); }
+        .card-preview iframe { transform: scale(0.3); transform-origin: 0 0; width: 333%; height: 333%; pointer-events: none; }
 
-  function checkUICompatibility() {
-    const iframes = document.querySelectorAll('.test-frame');
-    iframes.forEach(f => {
-      const card = f.closest('.link-card');
-      if (!card) return;
-      
-      setTimeout(() => {
-        try {
-          if (f.contentWindow.length === 0) {
-            card.classList.add('incompatible');
-            logAtlas(`UI_BLOCK_DETECTED: ${card.dataset.name} (Copy Link Only)`, "warn");
-          }
-        } catch (e) {}
-      }, 2000);
-    });
-  }
+        .card-info { padding: 12px; }
+        .card-title { font-weight: bold; color: var(--accent); margin-bottom: 4px; font-size: 14px; }
+        .card-meta { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  onValue(linksRef, (snapshot) => {
-    const list = document.getElementById('list');
-    list.innerHTML = '';
-    activeData = [];
-    
-    snapshot.forEach((child) => {
-      const data = child.val();
-      const targetUrl = data.anonLink || "";
-      activeData.push({ id: child.key, url: targetUrl, name: data.name });
+        .status-tag {
+            position: absolute; top: 10px; right: 10px; padding: 3px 8px; font-size: 9px; font-weight: bold;
+            border-radius: 4px; text-transform: uppercase; z-index: 10; background: rgba(0,0,0,0.5); border: 1px solid var(--border);
+        }
+        .status-secure { background: var(--accent); color: #000; border: none; }
+        .status-sus { background: var(--warning); color: #000; border: none; }
+        .status-blocked { background: var(--danger); color: #fff; border: none; }
 
-      const card = document.createElement('div');
-      card.className = 'link-card';
-      card.dataset.name = data.name;
-      const isHtml = targetUrl.trim().startsWith('<');
-      
-      if (isHtml) {
-        card.innerHTML = `
-          <div class="card-header"><strong>${data.name}</strong> <span class="tag">CODE</span></div>
-          <div class="html-preview">${targetUrl}</div>
-        `;
-      } else {
-        card.innerHTML = `
-          <div class="card-header"><strong>${data.name}</strong> <span class="tag">URL</span></div>
-          <div class="iframe-wrap">
-             <iframe src="${targetUrl}" class="test-frame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
-          </div>
-          <div class="card-actions">
-            <a href="${targetUrl}" target="_blank" class="launch-btn">LAUNCH</a>
-            <button onclick="copyToClipboard('${targetUrl}')" class="copy-btn">COPY_LINK</button>
-          </div>
-        `;
-      }
-      list.appendChild(card);
-    });
-  });
+        .home-hero { padding: 60px 20px; text-align: center; background: var(--bg-base); height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .logo { font-size: 48px; font-weight: 900; margin-bottom: 20px; color: #fff; }
+        .logo span { color: var(--accent); }
 
-  window.copyToClipboard = (text) => {
-    const el = document.createElement('textarea');
-    el.value = text;
-    document.body.appendChild(el);
-    el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    logAtlas("LINK_COPIED_TO_CLIPBOARD");
-  };
-
-  window.addLink = () => {
-    const name = document.getElementById('name').value;
-    const url = document.getElementById('url').value;
-    if(name && url) {
-        push(linksRef, { name, anonLink: url });
-        document.getElementById('name').value = '';
-        document.getElementById('url').value = '';
-    }
-  };
-
-  window.runAtlasPurge = runAtlasPurge;
-</script>
-<style>
-  /* Enable natural scrolling for Google Sites integration */
-  body { 
-    margin: 0; 
-    padding: 20px; 
-    color: #d0e8ff; 
-    font-family: 'Rajdhani', sans-serif;
-    background: transparent;
-    overflow-y: auto;
-    min-height: 100vh;
-  }
-
-  .panel { 
-    background: rgba(13, 18, 32, 0.9); 
-    border: 1px solid rgba(0, 255, 225, 0.2); 
-    padding: 20px; 
-    border-radius: 12px; 
-    margin-bottom: 20px; 
-    backdrop-filter: blur(10px);
-    /* Fade effect at the edges */
-    mask-image: linear-gradient(to bottom, black 95%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, black 95%, transparent 100%);
-  }
-
-  .atlas-terminal {
-    background: #000; 
-    border: 1px solid #00ffe1; 
-    padding: 15px; 
-    border-radius: 8px;
-    font-family: 'Share Tech Mono'; 
-    height: 120px; 
-    overflow-y: auto; 
-    margin-bottom: 20px;
-    font-size: 11px; 
-    box-shadow: inset 0 0 10px rgba(0,255,225,0.2);
-  }
-  
-  #atlas-log div { border-bottom: 1px solid rgba(0,255,225,0.05); padding: 2px 0; }
-  
-  h2 { color:#00ffe1; margin:0 0 10px 0; font-family: 'Share Tech Mono'; display: flex; justify-content: space-between; align-items: center; }
-  
-  .atlas-btn { 
-    background: #00ffe1; color: #000; border: none; padding: 5px 15px; 
-    font-size: 10px; font-weight: bold; cursor: pointer; border-radius: 4px;
-  }
-
-  input, textarea { 
-    width: 100%; background: #000; color: #00ffe1; border: 1px solid #1e3050; 
-    padding: 10px; margin: 4px 0; border-radius: 4px; box-sizing: border-box; font-family: 'Share Tech Mono';
-    outline: none;
-  }
-
-  /* List and Cards */
-  #list {
-    padding-bottom: 100px; /* Essential for scrolling past the bottom mask */
-  }
-
-  .link-card { 
-    background: rgba(255, 255, 255, 0.05); 
-    border-left: 3px solid #00ffe1; 
-    padding: 15px; 
-    margin-top: 15px; 
-    border-radius: 8px; 
-    transition: 0.3s;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-  }
-  
-  .link-card.incompatible { opacity: 0.4; filter: grayscale(1); }
-  .link-card.incompatible .card-actions { pointer-events: auto; }
-
-  .iframe-wrap { width: 100%; height: 250px; background: #fff; margin: 10px 0; border-radius: 4px; overflow: hidden; }
-  iframe { width: 100%; height: 100%; border: none; }
-  
-  .launch-btn, .copy-btn { 
-    background: #00ffe1; color: #000; text-decoration: none; padding: 8px 15px; 
-    font-weight: bold; font-size: 11px; border-radius: 3px; display: inline-block; cursor: pointer; border: none;
-    font-family: 'Share Tech Mono';
-  }
-  .copy-btn { background: #1e3050; color: #00ffe1; margin-left: 5px; }
-  .tag { font-size: 10px; border: 1px solid #00ffe1; padding: 1px 5px; border-radius: 3px; font-family: 'Share Tech Mono'; }
-
-  .html-preview {
-    background: #000; padding: 10px; border: 1px dashed #1e3050; border-radius: 4px;
-    max-height: 300px; overflow: auto;
-  }
-</style>
+        dialog { margin: auto; background: var(--bg-base); color: #fff; border-radius: 20px; padding: 30px; width: 450px; border: none; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
+        .err-msg { color: var(--danger); font-size: 12px; margin-top: 5px; display: none; }
+    </style>
 </head>
 <body>
-  <div class="panel">
-    <h2>
-      NETWORK_NODES
-      <button class="atlas-btn" onclick="runAtlasPurge()">RUN_ATLAS_SCAN</button>
-    </h2>
-    <div class="atlas-terminal" id="atlas-log"><div>SYSTEM_READY_FOR_DIAGNOSTIC</div></div>
-    
-    <input id="name" placeholder="IDENTIFIER">
-    <textarea id="url" rows="3" placeholder="URL OR <HTML_SOURCE>"></textarea>
-    <button style="width:100%; background:#00ffe1; border:none; padding:12px; margin-top:10px; font-weight:bold; cursor:pointer; font-family:'Share Tech Mono';" onclick="addLink()">PUSH_TO_NETWORK</button>
-  </div>
 
-  <div id="list"></div>
+    <div class="chrome">
+        <div class="tab-strip" id="tabStrip">
+            <div style="padding:10px 15px; cursor:pointer; color:var(--accent)" onclick="addTab()">+</div>
+        </div>
+        <div class="toolbar">
+            <div class="address-bar"><input type="text" id="omni" placeholder="Search Database or URL/Code"></div>
+            <button class="icon-btn" onclick="document.getElementById('publishBox').showModal()">📝</button>
+        </div>
+    </div>
+
+    <div class="viewport" id="viewport"></div>
+
+    <dialog id="publishBox">
+        <h3 style="margin-bottom:15px">Public Index Entry</h3>
+        <input type="text" id="p-name" placeholder="Name" style="width:100%; padding:10px; margin-bottom:10px; background:#000; border:1px solid var(--border); color:#fff">
+        <textarea id="p-link" placeholder="URL or Raw Code Snippet" rows="4" style="width:100%; padding:10px; margin-bottom:10px; background:#000; border:1px solid var(--border); color:#fff"></textarea>
+        <div id="publishError" class="err-msg">IDENTICAL DATA DETECTED IN ATLAS CORE</div>
+        <div style="display:flex; gap:10px; margin-top:10px">
+            <button style="flex:1; padding:12px; background:var(--accent); border:none; border-radius:8px; font-weight:bold; cursor:pointer" onclick="publish()">Publish</button>
+            <button style="padding:12px; background:#333; color:#fff; border:none; border-radius:8px; cursor:pointer" onclick="document.getElementById('publishBox').close()">Cancel</button>
+        </div>
+    </dialog>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyD9v8tKBmSU9vqqgBO34yBMRrbHcFZFAs0",
+        databaseURL: "https://yoshiuniverse-6e0c9-default-rtdb.firebaseio.com",
+        projectId: "yoshiuniverse-6e0c9",
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let tabs = {}; let tCount = 0; let activeId = null;
+
+    // FUZZY SEARCH LOGIC
+    function fuzzySearch(needle, haystack) {
+        needle = needle.toLowerCase().replace(/ /g, '');
+        haystack = haystack.toLowerCase().replace(/ /g, '');
+        
+        let n = 0;
+        let h = 0;
+        while (n < needle.length && h < haystack.length) {
+            if (needle[n] === haystack[h]) n++;
+            h++;
+        }
+        return n === needle.length;
+    }
+
+    async function performAtlasScan(url) {
+        if (!url || typeof url !== 'string') return { state: 'BLOCKED', label: 'NULL_DATA' };
+        if (!url.startsWith('http')) return { state: 'SECURE', label: 'LOCAL_CODE' };
+        try {
+            const safeDomains = ['google.com', 'github.com', 'firebaseapp.com', 'vercel.app', 'wikipedia.org'];
+            const isSafe = safeDomains.some(s => url.toLowerCase().includes(s));
+            return isSafe ? { state: 'SECURE', label: 'VERIFIED' } : { state: 'SUS', label: 'SUSPICIOUS' };
+        } catch(e) { return { state: 'BLOCKED', label: 'BLOCKED' }; }
+    }
+
+    function addTab(url = 'yoshi://home') {
+        const id = 'tab_' + (++tCount);
+        tabs[id] = { id, url, title: 'New Tab' };
+        const view = document.createElement('div');
+        view.id = `view-${id}`; view.className = 'tab-view';
+        document.getElementById('viewport').appendChild(view);
+        setActive(id); load(id, url);
+    }
+
+    function setActive(id) {
+        activeId = id;
+        document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+        document.getElementById(`view-${id}`).classList.add('active');
+        document.getElementById('omni').value = tabs[id].url.startsWith('yoshi://') ? '' : tabs[id].url;
+        renderTabs();
+    }
+
+    function renderTabs() {
+        document.querySelectorAll('.tab').forEach(t => t.remove());
+        const strip = document.getElementById('tabStrip');
+        Object.values(tabs).forEach(t => {
+            const el = document.createElement('div');
+            el.className = `tab ${t.id === activeId ? 'active' : ''}`;
+            el.onclick = () => setActive(t.id);
+            el.innerHTML = `<span style="flex:1; overflow:hidden; text-overflow:ellipsis">${t.title}</span><span onclick="event.stopPropagation(); closeTab('${t.id}')">✕</span>`;
+            strip.insertBefore(el, strip.lastElementChild);
+        });
+    }
+
+    function closeTab(id) {
+        const view = document.getElementById(`view-${id}`);
+        if(view) view.remove();
+        delete tabs[id];
+        const keys = Object.keys(tabs);
+        if(keys.length) setActive(keys[keys.length-1]); else addTab();
+    }
+
+    function load(id, url) {
+        if(!url) return;
+        tabs[id].url = url;
+        const view = document.getElementById(`view-${id}`);
+        if(url.startsWith('yoshi://')) {
+            const cmd = url.replace('yoshi://', '').split('?')[0];
+            const params = new URLSearchParams(url.split('?')[1]);
+            renderSysPage(id, cmd, params, view);
+        } else {
+            const isCode = !url.startsWith('http') && (url.includes('<') || url.includes('{') || url.includes('=>'));
+            tabs[id].title = isCode ? "Code Render" : url.split('//').pop();
+            const iframe = document.createElement('iframe');
+            view.innerHTML = '';
+            view.appendChild(iframe);
+            
+            if (isCode) {
+                iframe.srcdoc = `<!DOCTYPE html><html><head><style>body{margin:0;font-family:sans-serif;}</style></head><body>${url}</body></html>`;
+            } else {
+                iframe.src = url.includes('://') ? url : 'https://' + url;
+            }
+            renderTabs();
+        }
+    }
+
+    function renderSysPage(id, cmd, params, container) {
+        container.innerHTML = '';
+        if(cmd === 'home') {
+            tabs[id].title = 'Home';
+            container.innerHTML = `
+                <div class="home-hero">
+                    <div class="logo">Yoshi<span>Web</span></div>
+                    <input type="text" id="homeSearch" style="width:100%; max-width:600px; padding:15px 25px; border-radius:30px; background:#18181b; border:1px solid var(--border); color:#fff; outline:none;" placeholder="Search Atlas Index..." onkeypress="if(event.key==='Enter') load('${id}', 'yoshi://search?q='+this.value)">
+                </div>`;
+            setTimeout(() => document.getElementById('homeSearch').focus(), 100);
+        } else if(cmd === 'search') {
+            const q = params.get('q') || '';
+            tabs[id].title = 'Search: ' + q;
+            container.innerHTML = `<div class="results-grid" id="grid-${id}">ATLAS_CORE_SCANNING...</div>`;
+            fetchGrid(q, `grid-${id}`, id);
+        }
+        renderTabs();
+    }
+
+    function fetchGrid(q, gridId, tabId) {
+        db.ref('public/links').once('value').then(snapshot => {
+            const grid = document.getElementById(gridId);
+            if(!grid) return;
+            grid.innerHTML = '';
+            const data = snapshot.val();
+            if (!data) { grid.innerHTML = '<div style="color:#555; padding:20px">EMPTY_ATLAS_INDEX</div>'; return; }
+            
+            const matches = [];
+            Object.entries(data).forEach(([key, item]) => {
+                const nameMatch = fuzzySearch(q, item.name);
+                const linkMatch = fuzzySearch(q, item.anonLink);
+                if(nameMatch || linkMatch) {
+                    matches.push(item);
+                }
+            });
+
+            if(matches.length === 0) {
+                grid.innerHTML = `<div style="color:var(--danger); padding:20px">NO_MATCHES_FOUND_FOR: "${q.toUpperCase()}"</div>`;
+            } else {
+                matches.forEach(item => createAndScanCard(item, grid, tabId));
+            }
+        });
+    }
+
+    async function createAndScanCard(item, container, tabId) {
+        const isCode = !item.anonLink.startsWith('http');
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        card.onclick = () => load(tabId, item.anonLink);
+        
+        const badge = document.createElement('div');
+        badge.className = 'status-tag';
+        badge.innerText = 'PROBING';
+        card.appendChild(badge);
+
+        const frameHtml = isCode ? `<iframe srcdoc="<html><body style='margin:0;overflow:hidden;'>${item.anonLink}</body></html>"></iframe>` : `<iframe src="${item.anonLink}"></iframe>`;
+
+        card.innerHTML += `
+            <div class="card-preview">${frameHtml}</div>
+            <div class="card-info">
+                <div class="card-title">${item.name}</div>
+                <div class="card-meta">${isCode ? 'Encrypted Script' : item.anonLink}</div>
+            </div>
+        `;
+        container.appendChild(card);
+
+        const scan = await performAtlasScan(item.anonLink);
+        const tag = card.querySelector('.status-tag');
+        if(tag) {
+            tag.innerText = scan.label;
+            tag.classList.add(scan.state === 'SECURE' ? 'status-secure' : (scan.state === 'SUS' ? 'status-sus' : 'status-blocked'));
+        }
+    }
+
+    async function publish() {
+        const n = document.getElementById('p-name').value.trim();
+        const l = document.getElementById('p-link').value.trim();
+        const err = document.getElementById('publishError');
+        err.style.display = 'none';
+        if(!n || !l) return;
+
+        const snapshot = await db.ref('public/links').once('value');
+        const existingData = snapshot.val() || {};
+        if(Object.values(existingData).some(item => item.anonLink === l)) { err.style.display = 'block'; return; }
+
+        db.ref('public/links').push({ name: n, anonLink: l, timestamp: Date.now() }).then(() => {
+            document.getElementById('publishBox').close();
+            document.getElementById('p-name').value = '';
+            document.getElementById('p-link').value = '';
+            load(activeId, 'yoshi://search?q='+n);
+        });
+    }
+
+    addTab();
+    document.getElementById('omni').onkeypress = (e) => { if(e.key === 'Enter') load(activeId, e.target.value); };
+</script>
 </body>
 </html>
